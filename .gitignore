@@ -1,0 +1,3 @@
+working_dir
+*.log
+*__pycache__*

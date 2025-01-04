@@ -1,0 +1,534 @@
+Luori: Active Probing and Evaluation of Internet-wide IPv6 Fully Responsive Prefixes
+Abstract—With the large-scale deployment and application of IPv6, IPv6 network measurements will become more and more important. However, a special type of IPv6 prefix called Fully Responsive Prefix (FRP) is having a significant impact on IPv6 measurement campaigns, which is defined as all addresses under a prefix responding to scans. Obviously, there cannot be a real responder behind each of these addresses. To reveal the current status and impact of Internet-wide IPv6 FRPs, we propose for the first time an active probing method for Internet-wide IPv6 FRPs, Luori, which cleverly transforms the active probing process under IPv6 huge prefix space (potential range of prefix presence) into a dynamic search process in a tree based on reinforcement learning, achieving efficient probing of arbitrary routing prefixes. The evaluation results show that Luori found 31.7K largest FRPs in a single Internet-wide probing with 11M budget, covering 1.5×1030 address space, which is 106× that of existing methods. More importantly, after six months of Internet-wide probing, we have found 516k largest FRPs, which covers 1.3 × 1033 address space and 795 ASes, making it the largest publicly known FRP list. Based on this list, we screen out 20% of the addresses covered by FRPs from a well-known IPv6 active address dataset. Furthermore, we further analyze and find that the distribution of these FRPs is extensive and their implementation methods are diverse, which can provide beneficial references for the practical application of FRPs. Finally, we make this list publicly available and maintain it long-term for use and study by relevant researchers.
+Index Terms—IPv6, fully responsive prefix, active probing I. INTRODUCTION
+As the new generation of Internet protocol, IPv6 is undergo- ing rapid development and widespread deployment worldwide. As of May 2024, about 40% of Google users have access to services over IPv6, up from less than 2% a decade ago [1]. It is foreseeable that IPv6 will gradually replace IPv4 as the core of the Internet over time. Therefore, IPv6 network measurement, which is an important foundation for network situational awareness and network security, will become more and more important. For example, a large number of IPv6 active addresses (addresses that respond to scans) probing research [2]–[11] has been proposed in recent years, which is the basis for IPv6 network measurement.
+However, a special class of prefixes under IPv6 is making a huge impact on IPv6 network measurement, namely the fully responsive prefix (FRP) [12], [13], which is defined as all addresses under a prefix respond to probes (such as ICMPv6). For example, a single /48 FRP can cover 280 responsive addresses, but it is impossible for each of these addresses to correspond to a unique responder. Therefore, if FRPs are ignored in network measurement campaigns, a large number of probing resources may fall into the “FRP
+traps”, which not only wastes a lot of probing resources and time, but also results in few real probing targets and even distorts measurement conclusions. For example, in IPv6 active address probing, if an FRP is not discovered in time, all the probing resources will likely be gradually invested under the FRP until it is consumed. However, the rewards is meager. In a dataset containing 24.5M active IPv6 addresses from a well-known Hitlist service [12], [14], [15] (§IV-H), we found that there are 4.8M addresses under FRPs, accounting for a proportion of 20%. According to the 20%-50% hit rate of most of the current active address probing methods [2]– [6], [8]–[11], there are nearly 9.6M-24M probes that do not probe the real active addresses, i.e., the probing resources are wasted. Even worse, when we conduct other network measurement campaigns based on these addresses (e.g., port scanning [16], [17] and topology discovery [18]–[20]), the measurement results are unable to accurately reflect the real situation in the network, and may even be erroneous.
+Currently, research on FRPs is scarce. Efforts such as [6], [8], [14] have identified the presence of FRPs in active address probing and have proposed methods akin to brute- force probing to validate FRPs in probed active addresses (§II). Sattler et al. [13] have also studied similar prefixes (highly responsive prefixes) under IPv4 through brute-force probing. However, under IPv6, brute-force probing of Internet-wide FRPs is impractical, even with some high-speed tools like ZMap [21] and Masscan [22]. This is because IPv6’s address space is 296 times that of IPv4. Therefore, this paper aims to propose an efficient active probing method for Internet-wide FRPs and to perform long-term probing, thereby constructing and maintaining an Internet-wide FRP list (FRPlist) over time. On the one hand, this FRPlist can be used directly by relevant researchers to mitigate the impact of FRPs on their measurement campaigns. It can also serve as a dataset for the research community to avoid unnecessary network burden caused by redundant measurements. On the other hand, this FRPlist can reveal the current status and characteristics of Internet-wide FRPs that have emerged in abundance. This information can be used to explore the usage scenarios and implementation methods of FRPs, offering insights into their practical application in the network. However, achieving this goal is not straightforward, and we confront the following challenges:
+• Sparse distribution. Despite the considerable number of FRPs, their distribution is still extremely sparse when com- pared to the vast IPv6 address space, presenting a significant
+1
+
+challenge for their detection and discovery.
+• Diverse FRP patterns. The implementation of FRPs can
+vary widely and may be of arbitrary lengths, e.g., the FRP patterns under different global routing prefixes may be different, which makes it difficult to analyze and extract their features.
+• Dynamic change. FRP patterns may change dynamically over time, e.g., when the network environment changes. Continuously capturing FRP patterns to achieve long-term effective probing is necessary but challenging.
+To tackle the above challenges, we propose Luori, an efficient FRP active probing method based on reinforcement learning, which can probe FRPs under any target prefix at Internet scale. The core idea is to represent the entire probing space as a tree, and then abstract the probing process as a dynamic search process in the tree. Specifically, we utilize the hierarchical nature of trees to represent the entire poten- tial probing space, which is applicable to any FRP pattern, and to initially carve potential FRP patterns for each target prefix in the tree based on known FRPs. Then, based on the reinforcement learning idea, we propose an ingenious ε- Q strategy, which can continuously captures FRP patterns and adjust the direction of probing in the tree based on the probing feedback, thereby improving the probing efficiency and long- term probing effectiveness under the huge prefix space. To the best of our knowledge, this paper is the first study about Internet-wide IPv6 FRPs, which main contributions can be summarized as follows:
+• We propose an Internet-wide FRP active probing method based on reinforcement learning, i.e., Luori, which is also the first known Internet-wide FRP active probing method.
+• We have implemented and deployed Luori to allow contin- uous probing of Internet-wide FRPs. The evaluation results show that Luori found 31.7K FRPs1 in a single Internet- wide probing with 11M budget2, covering 1.5×1030 address space3 , which is 106 × that of brute-force probing.
+• As of now, Luori has been continuously probing Internet- wide for almost six months and has found 516k FRPs, which covers 1.3×1033 address space and 795 ASes, far exceeding the existing FRPlist, making it the largest publicly known FRPlist. Additionally, we also verified the authenticity of probed FRPs by sending about 280 emails. we also make the code and the FRPlist of this paper publicly available4 and maintain it long-term for use and study by the research community.
+• For the well-known and commonly used active address dataset (e.g., Gasser’s hitlist [12], [14], [15], we find that 20% of its addresses belong to the FRPs we provide. Fur- thermore, our analysis reveals that the FRPs in the FRPlist mainly come from about 650 organizations in industries
+1number of FRPs after taking the largest (same as below), i.e., avoid co- existence of a prefix and its sub-prefixes
+2number of FRPs planned for probing 3number of addresses covered by the FRPs 4https://frpv6.github.io/
+such as Cloud or CDN services, and network security. Mean- while, the implementation of FRPs is diverse, in addition to the specific technical means of Cloud or CDN vendors (e.g., Cloudflare’s addressing agility approach [13], [23]), most of them are based on the existing functionality implemented in Linux systems (e.g., net.ipv6.ip nonlocal bind option).
+II. RELATED WORK
+IPv6 FRPs. 6Gen [6] first mentioned such prefixes in IPv6 active address probing, naming such prefixes aliased prefixes and defining them as prefixes where all addresses within respond to scans and are considered responses from a single host. Subsequently, Zirngibl et al. [12] discovered that the technical implementations of some CDN vendors also result in all addresses of a prefix responding to scans, but these responses are not from a single host, such as Cloudflare’s addressing agility approach [13], [23]. Therefore, Zirngibl et al. introduced the concept of FRPs and defined that all addresses under it respond to scans, which is the superset of aliased prefixes. In addition, DET [8] defines such prefixes as active prefixes, equivalent to FRPs. In this paper, we follow the concept of FRPs.
+FRP Probing. In IPv6 active address probing, 6Gen [6] and Gasser et al. [14] have respectively proposed FRP probing methods based on active addresses to avoid their impact on active address probing results, especially the MAPD method proposed by Gasser et al. has become a common method. Note that MAPD claims to be an aliased prefix probing method, but it does not determine that responses under a prefix all come from the same host, so it is still essentially an FRP probing method. In subsequent active address probing research based on MAPD [2], [3], [5], [8], [10], IPv6 FRPs were found to be commonly present in networks. The core of MAPD is to brute- force enumerate prefixes of all lengths contained in the active address as candidate FRPs5, and then detect whether they are a real FRP or not by APD method. Meanwhile, due to its brute- force nature, there are some limitations on candidate prefixes, i.e., just enumerate candidate prefixes with lengths greater than or equal to 64. Although its probing method is brute-force, its detection method (APD) is still effective and has been commonly used. In this paper, we also use the classical APD detection method to determine whether a prefix is FRP or not. APD determines whether a prefix is an FRP by generating a random address under each of the 16 sub-prefixes under the prefix. For example, for prefix 2001:5af3::/32, 16 addresses are generated: 2001 : 5af3 : {0−f}∗∗∗ : ∗∗∗∗ : ∗∗∗∗ : ∗∗∗∗ : ∗∗∗∗ : ∗∗∗∗, where nibble 9 iterates over the values from 0 to f, and ∗ stands for a random value. This prefix is considered an FRP when all 16 addresses are responsive.
+2
+III. Luori DESIGN
+The goal of Luori is to perform continuous and efficient
+discovery of IPv6 FRPs at the Internet scale. Fig. 1 shows the 5with a high probability of being FRP
+A. Overview
+
+    Target Prefixes
+Known FRPs (Seeds)
+Search Tree Construction §( III-B)
+FRP Probing (§III-C)
+FRPlist
+Fig. 1. High-level overview of Luori
+high-level overview of Luori. The Search Tree Construction module constructs a search tree for each target prefix sep- arately, which not only represents the entire probing space under this target prefix, but also contains the potential FRP patterns under the target prefix. The FRP Probing module can continuously generate candidate FRPs under each target prefix in the search tree and performs active probing to determine if it is an FRP.
+Workflow. When conducting Internet-wide FRP probing, we first perform data preprocessing on Internet-wide routing prefixes [24] and known FRPs [12], [14], [15] collected from publicly available sources. For known FRPs, we take the largest as the seeds dataset. For Internet-wide routing prefixes, we directly obtain fully responsive routing prefixes (FRRPs) and Non-fully responsive routing prefixes (NFRRPs, i.e., target prefixes) through APD. After the search tree construction mod- ule obtains all the target prefixes and seeds, it will constructs a search tree for each target prefix separately. Next, the FRP probing module takes the search tree of all target prefixes as input and continuously discovering new FRPs under each search tree. Ultimately, Luori outputs all probed FRPs and forms the FRPlist. In addition, this FRPlist can be added to known FRPs for the next probe.
+B. Search Tree Construction
+As previously discussed, exhaustive enumeration is not an appropriate approach for the discovery of FRPs. Drawing inspiration from seed-based active IPv6 address discovery [2]– [11], we also employ the learned features from known FRPs (i.e., seeds) to guide the probing of unknown FRPs. Con- sequently, it is crucial to accurately represent the patterns of the seeds. However, this is not easy because the FRP patterns are diverse and dynamically changing, e.g., the length of the pattern changes when a parent prefix of some FRPs is found to be FRP. Considering that the hierarchical nature of trees is well-suited for addressing the dynamic changes in FRP patterns, we propose constructing a tree for each target prefix to represent its entire potential probing space Meanwhile, benefiting from the inspiration of Monte Carlo tree search [25], [26] in reinforcement learning, we further transform this tree into a search tree (not only nodes but also their state) to represent FRP patterns. In addition, to be able to initiate probing, we initially carved potential FRP patterns for Internet-wide all target prefixes in the tree based on seeds.
+Since the FRP under target prefixes consists of both a global routing prefix (assigned by the Regional Internet Registry or the Internet Service Provider) and a local subnet identifier
+(SID, configured by the routing prefix owner), the FRP pattern is determined by SID. For target prefixes that contain seeds (seeded prefixes), we can construct the search tree directly. As shown in Fig. 2, when constructing a search tree based on the seeds of a seeded prefix, we first create the root node (i.e., the seeded prefixes), and then recursively perform Expansion (§III-B1) and Backpropagation (§III-B2) based on SID of each seed, thereby establishing a complete search tree. Its different layers represent prefixes of different lengths, and each node can represent a prefix (i.e. the path to reach node). Moreover, the states of each node is reflected by the value of the node (e.g. whether it is FRPs or not). All nodes and their states represent the FRP pattern of the target prefix, and the FRP pattern changes dynamically with the change of node states. However, seeds are limited, so most target prefixes do not have seeds (unseeded prefixes). For such prefixes, we propose an inter-prefix search tree transfer strategy for search tree construction (see §III-B3).
+1) Expansion: We expand directly from the root node based on the SID of each seed. The depth of expansion is determined by the length of the SID. Specifically, the expansion consists of two parts: seed node expansion and potential node expansion. Seed node expansion refers to the direct expansion from top to bottom in the tree, following the left-to-right order of the seed’s SID. This process forms a seed path in the tree, composed of seed nodes, representing a known successful search path (i.e., an FRP). Furthermore, the core of relying on seeds to guide is that the seeds pattern can initially represent the overall pattern of the target prefix, i.e., the probability of potential FRPs existing in seed region (adjacent to seed nodes) is higher, because they share a consistent pattern. Therefore, we also perform potential node expansion based on the individual seed nodes on the seed paths. Specifically, first expand all the potential nodes (i.e., ∈ {0 − f}) in the same layer as the seed node, and then associate them with their parent nodes in the upper layer. As shown in Fig. 2, when the seeded prefix is 2001:5af3::/32 (i.e., the root), x = 32. If one of its seeds is 2001:5af3:1f90::/44 and assuming it is the first seed in the recursive process, its SID is “1f9”. The expanded seed nodes are “1”, “f” and “9”, forming a seed path. The other expanded nodes are potential nodes. The depth of the expansion is up to layer 4. Each node in the tree represents a prefix. For example, the potential node “2” in layer 2 represents the prefix 2001:5af3:2000::/36, and the leaf seed node “9” in layer 4 represents the seed 2001:5af3:1f90::/44. However, it should be noted that the non-leaf seed node does not represent a seed, as it is simply a parent prefix of the seed, e.g., the prefix 2001:5af3:1f00::/40 represented by the seed node “f” in layer 3.
+2) Backpropagation: The goal is to update the states (i.e., value information) on each node layer by layer in a reverse manner, starting from the leaf seed node until reaching the root node. This phase also mainly consists of two parts: known value backpropagation and potential value backpropagation. In known value backpropagation, since seeds are known FRPs, the known value (Vk) of all seed nodes on the seed path is
+3
+
+ Seeds under a seeded prefix
+    Backpropagation
+ROOT /x ROOT
+Current state
+ROOT Nk=1 Vk =16
+Expansion
+Vf =0
+    Layer 1:
+  1
+...
+0
+2
+...
+Vf∈{0,1,2}
+Vf =2
+Vf =2 1Nk=1 Vk =16
+2
+V =2 f
+...
+V =2 f
+ 0
+Layer 2:
+2 /(x+4)
+1
+0N =1 p
+Np =1 Vp =15
+Np =1 Vp =14--
+Vp =15
+ Layer 3:
+Np =1 Vp =15 Vp =14--
+Vk =16
+... e f /(x+8)
+e
+f ...Vf =2 e N =1 p
+f
+N =1 k
+...
+Vf =2
+Vf =2
+Vp+=v-- Np+=1
+   Vk+=v Nk+=1
+  Layer4:
+... 8 9 ... a
+/(x+12)
+... 8
+9
+a ... ... Vf =2 8 Vf =2   Vf =1 a V =2 ... Vf =2 N =1 Np =1 N =1 Nf =1 N =1
+p kpp
+V =15 V =14-- Vp =14-- p Vk =16 Vp =15 p
+ Seed Node Expansion Known Value Backpropagation 0 NFRP
+. . . Potential Node Expansion Potential Value Backpropagation Vf = 1 FRP
+... 2 Unknown
+            Fig. 2. Search Tree Construction, where + = denotes accumulation and v − − denotes the Vp of the node at the omission decreases from a constant v
+increased by v (i.e., Vk+ = v), and the number of known visits (Nk) is also increased by 1 (i.e., Nk+ = 1). In potential value backpropagation, potential nodes receive value (Vp) from adjacent seed nodes. The Vp obtained by different potential nodes of a seed node gradually decrease from near to far (i.e., Vp = v−−), because it is more likely to be an FRP when closer to the seed pattern. Meanwhile, the number of potential visits (Np) to the potential node is also increased by 1 (i.e., Np+ = 1). However, their Vp and Np are not propagated upwards, because they have not been actually visited and have no known value. They just have a higher probability to be FRP nodes, and their true value has to be explored further. In addition, we also mark whether the prefixes represented by the node is FRP or not. A flag value (Vf ) of 0 indicates a non-fully response prefix (NFRP), Vf = 1 indicates an FRP (e.g., a seed), and Vf = 2 represents unknown. Fig. 2 shows the current state of the search tree after expansion and backpropagation based on the first seed 2001:5af3:1f90::/44 when v = 16. The root node (i.e., seeded prefix) is pre- determined to be a NFRRP, so Vf = 0. The seed node “9” in layer 4 (i.e., seed) has Vf = 1, and all other nodes are Vf = 2. Note that the Vf of seed nodes “1” and “f” is also 2, since a seed’s parent prefix may also be FRP.
+3) Inter-prefix Search Tree Transfer: As the above process is recursively executed, the nodes and states of this tree will undergo constant changes. The Vk, Nk, Vp and Np of the nodes will continuously accumulate, and the Vf may also change. For example, the Vf of a potential node may change from 2 to 1 as a new seed is loaded. When all the seeds under a seeded prefix are loaded into the search tree, this search tree represents the current FRP pattern of the seeded prefix and its entire potential probing space (because the tree can be continuously expanded), initiateing subsequent FRP probing process. However, for unseeded prefixes, since they do not have any prior knowledge (i.e., seeds), the FRP patterns are completely unknown. Therefore, we also propose an inter- prefix search tree transfer strategy, whose goal is to transfer some potentially similar search trees (i.e., FRP patterns) from
+seeded prefixes for each unseeded prefixes. Otherwise, it is difficult to initiate probing.
+The core of this strategy is that target prefixes with the same attributes (e.g., AS) have similar FRP patterns, i.e., the relevant attributes of target prefixes are used to transfer the search tree. First, based on network management experiences, prefixes with similar attributes are likely to have consistent configurations because they often have consistent use cases and are managed by the same network engineers. This expe- rience is also applied in similar tasks, such as active address probing [10]. In addition, we also conducted tests based on the three attributes of the prefix belongs to the AS [24], organization [27] and business categories [28], [29] selected in this paper. We find that the information entropy of seeds under a single attribute decreases compared to the information entropy of all seeds, especially AS. Therefore, based on these three attributes, we design a hierarchical transfer strategy from fine-grained to coarse-grained. Specifically, for a unseeded prefix, we first obtain its AS and then match it with all the ASes to which the seeded prefix belongs. If successfully matched, search trees (excluding the root node) of all matched seeded prefixes are merged to create a new tree. During the merge process, nodes from different trees are combined, and the value information of the nodes is accumulated. Once the root node is set to the unseeded prefix, the search tree transfer is completed. If any search tree cannot be matched based on AS, then layer-by-layer matching will be performed based on the organization or business category to which the prefix belongs. Since the granularity of business categories is very coarse, eventually all target prefixes will get a search tree.
+C. FRP Probing
+The purpose of this module is to efficiently probe all target prefixes (including seeded and unseeded prefixes) based on search trees. However, since the search tree can be continu- ously expanded, its search space is huge. Meanwhile, the seed patterns may not fully represent the FRP patterns under the target prefix, e.g., they may be incomplete. Therefore, relying solely on the patterns of seeds for probing may result in a large
+4
+
+      Selection
+ROOT
+Repeated B times Probing
+ROOT
+0 1 2
+Backpropagation
+ROOT
+Vf =2 V =2
+p
+         Qp Q Qp 0 1k 2
+... Qp =14--
+...
+Vf =2
+...
+=15
+=16 =15 Q Qk
+0Np=1 1Nk=2 2Nf=1
+Vf=2
+...Qp =14--
+... Vf =2 Vf =2 Vf =2 epf ef...Nk=2
+=15 =16 8 Qp Qk
+16 Nodes are Created
+Randomly Generate 16 Addresses
+Np =1 Vp =14--
+e Np =1 Vp =15
+f Vk =18
+Vp =15 Vk =18 V p=15
+Np =1 Vp =14--
+        ...Qp =14--
+Qp =15
+...Qp= 14--
+... 8 0 1
+Responsive
+...
+Online Scanning
+... V=2 f
+Vf=0 8 Nk=1 Vk=2
+V=2 ...V=2 ff
+a
+a
+...Np =1 Vp =14--
+V=1 f
+  =15 =0 Exploitation
+a
+Vf =2 f Np=1 Vp =0
+Np =1 Np =1 Vp =15 Vp =14--
+ Nk=1 Vk =16
+      Exploration
+...
+f
+Probing Feedback
+   Unresponsive
+Vf =2 0 Np=1 Vp =1
+Vf =2 1 Np=1 Vp =1
+Vf =2 ...Np=1 Vp =0
+-Q strategy
+�
+ number of FRPs not being found. To address this challenge, based on reinforcement learning idea, we propose an ingenious ε-Q strategy, which putting the limited probing resources on the more worthwhile branches to discover more new FRPs. And this tree is continuously updated (i.e., pattern) based on probing feedback to facilitate ε-Q to make optimal decisions in real-time. Fig. 3 illustrates the workflow of dynamic prob- ing, which iteratively executes the Selection (III-C1), Prob- ing (III-C2) and Backpropagation (III-C3) modules according to the budget of each target prefix (B).
+1) Selection: The aim is to select the most valuable branch (i.e., a candidate FRP is generated) in the current state of the search tree. The recursive selection process starting from the root node is usually completed by a strategy, the core of which is to use the value information of the nodes in the tree’s current state to make the optimal choice. However, this optimal choice is not to always select the known better nodes (e.g., seed nodes “1” and “f”). Although we want to select along the seed path as much as possible (i.e., exploiting existing seed prior knowledge), it also needs to be able to select in other unknown paths (i.e., exploring the space where seeds do not exist), to avoid getting stuck in the seed pattern without any opportunity to discover more other FRP patterns. To achieve a balance between exploitation and exploration, we designed the selection strategy ε-Q in this paper based on the ε-Greedy algorithm [30], [31]:
+argmaxQk(s,a) Pk =1−ε,
+ a∈Ak (s)
+a= (1)
+argmaxQ (s,a) P =ε, pp
+a∈Ap (s)
+where s and a represent the current state and action (i.e., selecting a node from {0 − f }), respectively. Ak (s) and Ap(s) represent the set of known and potential nodes that can be selected in a single selection under state s, respectively. Ak(s) includes the seed nodes and the newly probed FRP nodes (i.e., nodes on the new FRP paths) before state s. Ak (s) ∪ Ap (s) = {0 − f }. Specifically, this strategy con- sists of two components, corresponding to exploitation and
+exploration. In each selection, the action a with the highest known expected reward (Qk ) in the Ak (s) is selected with probability 1 − ε (i.e., exploitation), and the action a with the highest potential expected reward (Qp ) in the Ap (s) is selected with probability ε (i.e., exploration). The balance between exploitation and exploration can be adjusted by ε (∈ [0, 1]). Additionally, it can be seen that in exploration, we cleverly introduce Qp to select from potential nodes, instead of randomly selecting. This is conducive to the full utilization of prior knowledge and can effectively increase the likelihood of selecting high-value nodes. The functions Qk and Qp are defined as follows:
+Qk(s,a)= Vk(s,a) ×|Vf −1| a∈Ak(s), (2) Nk (s, a)
+Vp(s, a)
+Qp(s,a)=Np(s,a)×|Vf −1| a∈Ap(s), (3)
+Where Qk(s,a) and Qp(s,a) are the Qk and Qp of action a under state s. Vk(s,a), Nk(s,a) and Vf are the known value information for the known node corresponding to action a under state s. Vp(s,a), Np(s,a) and Vf are the potential value information for the potential node corresponding to action a under state s. Their definitions are similar, with the former representing the average Vk or average Vp, while the latter cleverly introduces Vf to indicate whether the node is selectable or not. Specifically:
+i) When Vf = 1, it indicates that the prefix represented by this node is already an FRP. Therefore, this node should not be selected, and this branch will not be probed, as its child nodes must also be FRP. At this point, based on the above function, it can be determined that Q = 0, indicates that the node will not be selected during the probing process.
+ii) When Vf = 0 and 2, it means that the node is NFRP and unknown, and both of them will be possible to be selected. In this case, |Vf −1| = 1, which does not affect the calculation of Q. Note that a node with Vf = 0 simply means that the node itself is an NFRP, but it does not mean that all its children are also NFRP. Therefore, it may still be selected, i.e., continue
+Fig. 3. FRP Probing (search tree in initial state is shown in Fig. 2)
+  5
+
+exploring this branch downwards. However, it is necessary to ensure that it is not the last node to be recursively selected.
+Moreover, in our scenario, a larger prefix of an FRP may also be an FRP (i.e., the parent node of FRP). If we keep selecting leaf nodes for probing, it may lead to a lot of wasted probing resources. Therefore, in state s, the last recursively selected node is all nodes with Vf = 2 in the tree, not just the leaf nodes with Vf = 2. At the same time, this also exactly avoids selecting the prefix represented by nodes with Vf = 0. To realize the selection of non-leaf nodes, we design a simple but effective method. When there are more than n FRP among the child nodes of a parent node and no NFRP, we prioritize selecting the parent node to determine if it is an FRP, to avoid wasting probing resources. As shown in Fig. 3, it illustrates a possible selection path (the search tree is from Fig. 2). Typically, there is a bias toward exploitation, i.e., ε is set smaller, as selecting based on Qk often leads to higher real rewards. Therefore, the node with the maximum Qk among the known nodes in each layer will be selected with a higher probability, i.e., node “1”, “f” is selected. Meanwhile, since node “9” represents the seed prefix (i.e., Qk = 0) and cannot be selected, the potential node “8” with the maximum Qp is selected. Note that when there is more than one node corresponding to the maximum Q, it is sufficient to select randomly from them. Finally, when the target prefix is 2003:89af:0011:/48, a candidate FRP prefix 2003:89af:0011:1f80::/60 consisting of selected nodes is generated (i.e., prefix represented by node “8”).
+2) Probing: The aim is to expand the children of the selected node and detect whether the node is FRP or not. For the selected node, we first expand its child nodes, i.e., a total of 16 child nodes from 0 to f are created. Meanwhile, we also continue to randomly expand the 16 addresses based on the selected nodes and the expanded child nodes. Next, these 16 addresses are scanned online by sending ICMPv6 requests to determine whether they are responsive, as the states of the selected nodes and possible states of the child nodes are reflected by these 16 addresses, according to the APD detection method. As shown in Fig. 3, based on the selected “1f8”, the 16 addresses obtained by the expansion are 2003 : 89af : 0011 : 1f8{0−f} : ∗∗∗∗ : ∗∗∗∗ : ∗∗∗∗ : ∗∗∗∗. And it may be that just address 2003 : 89af : 0011 : 1f8{0−1}:∗∗∗∗:∗∗∗∗:∗∗∗∗:∗∗∗∗ is responsive.
+3) Backpropagation: The purpose of this step is to update the value information of nodes (i.e., state of the tree) based on the response status of the 16 addresses in the probing, starting from the expanded 16 child nodes in reverse, layer by layer, until reaching the root node. It is important to note here that once a potential node has been selected and the probing has been executed, it will be transformed into a known node. Before performing the backpropagation, its value information will be transformed from Vp and Np to Vk and Nk and initialized to 0. Based to the APD method, there will be three scenarios as follows:
+• Case 1: when all 16 addresses have responses, the selected
+node is an FRP. At this time, consistent with the backprop-
+agation in search tree construction (§III-B), the Vk and Nk of all nodes on the selected path will be increased by v and 1, respectively. And the corresponding Vp (i.e., v − −) is propagated to the potential nodes. Furthermore, the Vf of the selected node is set to 1, and the expanded child nodes will be pruned.
+• Case 2: when 16 addresses are partially responsive (e.g, only m address responses), the Vk and Nk of all nodes on the selected path will be increased by m and 1, respectively. The Vp and Np of the responsive child nodes is added 1, and Vp of the unresponsive child nodes is 0 but Np plus 1.
+• Case 3: when all 16 addresses are unresponsive, the Vk of the selected node is 0 and does not back propagate, but the Nk of all nodes on the selected path will be increased by 1. Similarly, the Vp of all child nodes is 0 but Np plus 1.
+Furthermore, for Case 2 and Case 3, the Vf of the selected node is set to 0 and the Vf of its all expanded child nodes is set to 2. After the reverse value information update, the probing feedback is propagated to the whole prefix space to optimize the next probing. As shown in Fig. 3, based on the probing results (§III-C2), the Vk of the selected node “8” is updated to 2 and back propagated to the root node, and its Vf is updated to 0. The Vp and Np of “0” and “1” in the expanded child nodes is updated to 1. The Vp of other expanded child nodes is 0. The Vf of all expanded child nodes is 2.
+IV. EVALUATION
+We have implemented a prototype of Luori and deployed it from November 2023 to April 2024. In this section, we evaluate the performance of Luori during its deployment.
+A. Experimental Setup
+1) Seed Datasets: To evaluate the performance of Luori, we first obtained an Internet-wide total of 211,037 announced IPv6 routing prefixes from the RouteViews project [24] and CAIDA [27]. The initial FRP detection for these prefixes by APD reveals 5302 FRRPs. Therefore, the target prefixes to be probed are 205,735. Further, we select the latest FRPlist (May 4, 2023) provided by a well-known IPv6 hitlist service [12], [14], [15] as the dataset, which contains 5.1M FRPs and comes from active address probing. However, it is just 1.03M after taking the largest. Meanwhile, 4,703 of them belong to known 5302 FRRPs. Therefore, the final seed dataset contains 1.02M FRPs covering 1858 target prefixes (i.e., seeded prefixes), and thus the number of unseeded prefixes is 203,877.
+2) Evaluation Metrics: We design the following three met- rics to fully evaluate the performance of Luori: (1) Address space (i.e., number of addresses) covered by the probed largest FRPs. (SFRP). (2) Number of ASes covered by the probed largest FRPs. (NAS). (3) Number of routing prefixes covered by the probed largest FRPs. (NRP ). The goal of FRP probing is to discover as many of the largest FRPs as possible among a certainB,i.e.,SFRP islarge.Additionally,itisalsoimportant to cover as wide a range of the Internet as possible, i.e., more NAS and NRP , to reflect the potential for probing FRP across the entire Internet. Note that evaluating based on the number
+6
+
+                         TABLE I
+PERFORMANCES OF Luori AND MAPD (B IS THE BUDGET FOR EACH TARGET PREFIX AND #FRP IS THE NUMBER OF LARGEST PREFIXES PROBED)
+Target Prefixes
+Metric
+seeded prefixes (Number: 1858)
+B = 400 Luori MAPD
+unseeded prefixes (Number: 203,877)
+#FRPs 8640
+100 100
+50 50
+75
+75 50
+50 25
+25
+0.1 0.2
+0.1 0.2
+554 18,373
+12,702 36,839
+NRP SFRP NRP SFRP
+0.1 0.2
+0u.3nder see0d.4ed pref0ix.5es 0.7 under seeded prefixes
+B = 200 Luori MAPD
+B = 600 Luori MAPD
+B = 20
+Luori MAPD
+B = 50
+Luori MAPD
+NAS NAS
+1e29 1e29
+0.9
+1e27
+0.9 0.9
+2 2
+0 0
+2 2
+0 0
+0.3
+0.4
+0.5 0.7
+u0n.3der uns0ee.4ded pre0f.i5xes 0.7
+under unseeded prefixes
+Fig. 4. Performance of Luori under different ε values
+of largest FRPs may not accurately reflect the superiority of a method because different prefixes vary in size. For instance, if the largest FRP is not probed, many sub-prefixes of this FRP may be found, leading to an inflated count of FRPs.
+3) Hyper-parameters: In search tree construction, since the FRP is judged to pass 16 random addresses belonging to its sub-prefixes, v is set to 16. This also ensures that the Qp can be propagated to any node. In FRP probing, n is set to 3 based on experience. Under seeded and unseeded prefix, ε is set to 0.2 and 0.1, respectively, which is discussed in §IV-C.
+B. Performance of Luori
+Currently, since there is no Internet-wide work on active probing of FRPs, Luori is compared to MAPD [14], a brute force probing method (§II). Table I shows the SF RP , NAS and NRP for all methods under different B, including seeded prefixes and unseeded prefixes. Furthermore, to demonstrate that the number of largest FRPs (#FRPs) does not reflect the performance of a method, we also show the #FRPs for all methods. It is evident that Luori outperforms the brute-force probing method MAPD. Under all target prefixes and all B values, we observe that Luori probes the highest SFRP and NAS. More importantly, SFRP and NAS are 106-107× and 1.2-2.6× higher than MAPD, respectively. The reason for the order of magnitude difference on SF RP , which is mainly due to the ability of Luori to probe FRPs of any length, and to prioritize the probing of larger FRPs based on feedback. As a result, the FRPs probed by Luori are basically the largest FRPs. This can also be proven from #FRP. Although the #FRPs of Luori are less, the probed FRPs are larger, which
+9.5×1029 1.0 × 1024
+1075 645 272 246 378 432
+1.7×1029 1.6 × 1022
+29,260 54,568 1126 876 2424 2166
+covers a larger address space. However, MAPD can only brute-force probe fixed-length FRPs (i.e., enumerate /64 to /124 prefixes). Meanwhile, Luori probed FRPs covering more AS, particularly under the seeded prefixes, mainly due to the design of the ε-Q strategy (exploration and exploitation) and the continuous adjustment of the probing direction based on the feedback to find FRPs in more space.
+In addition, NRP of Luori is larger than MAPD for most of B, and smaller than MAPD only for unseeded prefixes with B=20. We explore the reason for this, which is mainly due to the bias of the seeds in the search tree, because the dataset of Hitlist mainly consists of /64 prefixes (see §IV-D for details). However, this does not affect the effectiveness of Luori, because both SFRP and NAS of Luori are still larger than MAPD, especially SF RP . For the case of biased seeds, we believe it will gradually improve with long-term probing (i.e., continuous enrichment of the seeds dataset). Overall, regardless of whether the target prefix is a seeded prefix or an unseeded prefix, Luori shows excellent performance, especially with seeded prefixes. For unseeded prefixes without any prior knowledge, the probing itself is indeed difficult, so the result is not so impressive, but it is still better than the current way and also found a huge address space under FRPs. Meanwhile, with the continuous probing, the unseeded prefixes will gradually become seeded prefixes, and its probing efficiency will continue to improve. Note that the budgets are not set the same here for seeded and unseeded prefixes. On the one hand, because the probability of the existence of FRPs under unseeded prefixes is small compared to that of seeded prefixes, investing too much probing resources at one time may not yield anything. On the other hand, it is to avoid the measurement ethics issue. The number of unseeded prefixes is large (204k), so a high budget will lead to occupying a large amount of network resources.
+C. Effect of Hyper-parameters
+The constant ε (∈ [0, 1]) is used to adjust the balance be- tween exploitation and exploration in the ε-Q strategy. Gener- ally, it is set to a small value, leaning towards utilizing existing knowledge for exploitation. Due to the difference in a priori knowledge between seeded and unseeded prefixes, to achieve optimal performance of Luori, we conducted experiments by sampling 10% from seeded and unseeded prefixes multiple times, and the budgets were set to 400 and 20, respectively. As shown in Fig. 4, under seeded and unseeded prefixes, when
+1.1×1029 3.4 × 1023
+NAS 129 60 129 69 180 68 37 30 68 44
+SF RP
+NRP 695
+4.9×1029 6.8 × 1023 713 612
+5.4×1029 4 × 1022
+7
+       0.1 0.2 0.3 0.4 0.5 0.7 0.9
+ 1e27
+N N a n da nNd N AS AS RP RP
+N N a n da nNd N AS AS RP RP
+SS SS FRPFRP FRPFRP
+
+6K 4.5K 3K
+1.5k 2023-11
+2023-12 2024-01
+2024-02 2024-03 Date
+500K 250K
+2024-04 2024-05 0
+Fig. 5. Changes in the number of FRRPs and FRNRPs with iterative probing, where each “+” indicating the merging of newly probed FRNRPs into FRPlist
+Dataset
+Our FRPlist
+Hitlist’s FRPlist
+Publication time
+April 30, 2024 May 4, 2024
+SF RP 1.3 × 1033
+1.2 × 1032
+NAS NRP 795 9182
+629 6561
+#FRPs #FRRPs
+0.52M 7079 1.03M 4671
+#FRNRPs
+0.51M 1.03M
+TABLE II
+COMPARISON OF OUR Our FRPlist AND HITLIST’S FRPLIST (#FRPS=#FRRPS+#FRNRPS)
+ε = 0.2 and 0.1, respectively, SF RP , NAS and NRP of Luori are achieved to their maximum values. Therefore, we set ε to be 0.2 and 0.1 under seeded and unseeded prefixes in this paper, respectively.
+D. Performance of Luori for Long-Term Probing
+As of now, we have accumulated an FRPlist containing 515,739 largest FRPs, which covers 1.3 × 1033 address space, equivalent to the address space covered by 7.1 × 1013 /64 prefixes. In addition, in this FRPlist, there are 7079 FRRPs (FRRPlist) and 508,660 fully responsive non-routing prefixes (FRNRPlist), which covers 795 ASes and 9182 routing pre- fixes in total. Fig. 5 shows the long-term iterative probing results of Luori from November 2023 to April 2024, i.e., the change in the number of FRRPs and FRNRPs in FRPlist, where each “+” indicating the merging of newly probed FRNRPs into FRPlist (taking the largest). The seeds for the first probe comes from the FRPs found in the active address probing (about 52K), and the seeds in each subsequent probe are collected from the previous probe. During these six months, we can observe that the overall quantities of both FRRPs and FRNRPs are continuously increasing, with FRRP increasing from 4.5K to 5.5K, and FRNRP increasing from 52K to 500K (almost 10×). Notably, for FRNRPs, after the first probing, the quantity of FRNFRs actually decreased. This is mainly because Luori discovered that the larger prefix of the seeds is FRP, so the quantity decreased after merging. But it can be seen that this situation did not occur later, which thanks to Luori’s ability to prioritize probing larger FRPs. Additionally, the probing results of FRRPs come from travers- ing scans of Internet-wide all routing prefixes announced by BGP. Therefore, the continued growth of FRRPs is more evidence that FRPs will become more and more common in the future. This not only implies that the impact of FRP on IPv6 measurement campaigns will be even more significant, but further highlights the value of FRP’s potential applications.
+E. Comparison of Our FRPlist and Hitlist’s FRPlist
+To further analyze our FRPlist, we also compare it with the only publicly available latest FRPlist in the Hitlist service (§IV-A1), which was accumulated over time through MAPD
+during active address probing, with a longer accumulation time than ours. Note that we consider the Hitlist’s FRPlist to be cumulative because the FRPlist under different times contains a large number of duplicate FRPs. Therefore, we chose its latest FRPlist for comparative analysis. As shown in the Table II, although the number of the largest FRPs in Hitlist’s FRPlist is nearly double that of our FRPlist, our FRPlist covers 10× more address space. This is mainly because MAPD cannot probing the largest FRPs, i.e., Hitlist’s FRPlist contains a large number of sub-prefixes of larger FRPs. Additionally, the number of ASes and routing prefixes it covers is also smaller than that of our FRPlist, which is mainly because Luori achieves Internet-wide active probing. Overall, Hitlist’s FRPlist is sourced from active address probing, i.e., it is not Internet-wide probing. At the same time, the MAPD probing method it adopts has a large limitation.
+As shown in Fig. 6, we further analyze the length dis- tribution of FRPs in our FRPlist and Hitlist’s FRPlist. For the FRRPs in both lists, most of their lengths are less than or equal to 48, especially /48 prefixes account for most of them. However, our FRPlist contains more larger FRPs (i.e., length≤47), which benefit from the results of our long- term probing of Internet-wide all routing prefixes. More ob- viously, the length distribution of FRNRPs in our FRPlist is diverse (/28-/80), and it also contains more larger FRPs (e.g., length≤64). However, the length of FRNRPs in the Hitlist’s FRPlist is basically 64. This is mainly because Luori can probe FRPs of arbitrary length based on search trees and find the largest FRPs as preferentially as possible. However, when Hitlist collects FRPs based on active addresses by MAPD, which only detects prefixes that are smaller than /64 and contain more than 100 active addresses under them. The above shows why our FRPlist contains a larger address space and is more widely distributed. Meanwhile, this also demonstrates the effectiveness of Luori and the limitations of collecting FRPs based on IPv6 active address probing.
+Key takeaways: By comparison with the only publicly available FRPlist from Hitlist, our FRPlist covers 10× more address space and also covers more Internet-wide ASes and routing prefixes. Therefore, our FRPlist should be the largest publicly known FRPlist to date.
+8
+          FRRP FRNRP
+  #FRRP
+#FRNRP
+   
+    FRRPs in Our FRPlist
+FRNRPs in Our FRPlist
+FRRPs in Hitlist's FRPlist
+FRNRPs in Hitlist's FRPlist
+1.0 0.8 0.6 0.4 0.2 0.0
+F. Distribution of FRPs.
+Our FRPlist demonstrates that IPv6 FRPs have become a common phenomenon. To further study their characteristics and possible usage scenarios, we investigate which ASes, organizations announce these FRPs. Table III shows the in- formation related to the 10 ASes with the highest number of FRPs in FRPlist, FRRPlist and FRNRPlist, respectively, including the number of FRPs, the main open TCP/Ports and the organization to which the AS belongs. Firstly, it can be observed that there is a significant difference in the distribution of FRPs among ASes, with the majority concentrated in a few ASes. For example, the top 10 ASes in FRPlist account for 89% of the total FRPs. This indicates that there may be some specific usage scenarios for most Internet-wide FRPs.
+To further mine the reasons for these ASes announcing FRPs, we analyzed the organizations to which these ASes belonged. The results show that ASes with more FRPs are from large Cloud or CDN service providers, such as Imperva (Incapsula), Cloudflare, Amazon and Akamai. We infer that FRPs may be a technical means that they need a large number of network addresses to efficiently support their services. Couldflare’s addressing agility approach [13], [23] is one of the relevant technical means, which utilizes FRPs to decouple IP addresses from domain names and services, improving addressing flexibility, i.e., authoritative name servers can select addresses in query responses from full prefixes. Therefore, all addresses within that prefix must respond. At the same time, we also found that the main open ports under these FRPs are 80/443 (i.e., HTTP/HTTPS), further confirming this point. We believe that other large Cloud or CDN service providers have implemented similar techniques, which is why there are a large number of FRPs under their ASes. In addition, the rest of the FRPs in FRPlist are mainly from about 650 different organizations [27], which also shows that FRPs have been widely used in practice. These organizations are mainly from Network Security, Online Music and Video Streaming Services, Internet Service Providers (ISPs), and so on [28], [29]. For Network Security, we found that Cloudflare Spectrum [13], [32]–[34] may be related to IPv6 FRPs, which are reverse TCP/UDP proxies used for DDoS protection. For Online Music and Video Streaming Services, this is one of the main applications of CDN networks that can provide high
+30 40 50 Prefix Length
+70 Prefix Length
+110
+30 40 50 60 Prefix Length
+30
+70 110 Prefix Length
+1.0 0.8 0.6 0.4 0.2 0.0
+30
+1.0 0.8 0.6 0.4 0.2 0.0
+1.0 0.8 0.6 0.4 0.2 0.0
+Fig. 6. CDF of the length of FRPs in Our FRPlist and Hitlist’s FRPlist
+9
+bandwidth and low latency services. For ISPs, we speculate that FRPs can be used as proxy services to assign random IPv6 addresses to users in real-time.
+Key takeaways: These FRPs mainly come from 650 or- ganizations in industries such as Cloud or CDN service, network security and ISPs, especially Cloud or CDN service contributing most of these FRPs. This shows that FRPs has been widely used in practice, especially in Cloud and CDN network. The above analysis can also help to further optimize Luori’s probing strategy to discover more FRPs, such as prioritizing probing of Cloud or CDN networks.
+G. Email Verification
+To further analyze these FRPs we probed and to verify their authenticity, we have sent emails to network managers of 280 different ASes (mailboxes are accessible and contain more FRPs). As of now, we have only received responses from 7 ASes, one of which was not aware of such prefixes. But they both confirm that the FRPs we probed are correct. Specifically, in one AS (not belonging to Cloudflare), FRPs were reported to be an implementation of a certain CDN technology, and each FRP does not correspond to the same host, but the details were not provided. Furthermore, in five ASes, FRPs were reported to be implemented based on existing functionality of the Linux system, and each FRP corresponds to the same host. The mentioned implementation methods are as follows: (1) net.ipv6.ip nonlocal bind. It is a configuration option in the Linux kernel that controls the binding of IPv6 addresses. When set to 1, it allows binding to non-local IPv6 addresses, i.e. FRPs are implemented. (2) ip -6 route add local PREFIX dev IFACE. This is a command to add an IPv6 local route on a Linux system for a specific IPv6 prefix on a network interface (IFACE). In addition, we investigated that the IP FREEBIND option in Linux also enables multiple IPv6 addresses to be bound to the same host [14]. Moreover, they also share usage scenarios for these FRPs, including: (1) Spreading requests over many IP addresses to address IP-based rate limiting in large systems. (2) FRPs used as proxy services (e.g., intranet proxies) to assign random IPv6 addresses to users.
+Key takeaways: We sent emails to 280 ASes. Although only 7 replies were received, they verified the authenticity of our probed FRPs and our analysis of FRP usage scenarios (§IV-F),
+   /48
+0.99
+0.39
+  /47
+     0.89
+ /80
+ 0.075
+/56
+     /48
+0.99
+0.21
+/47
+      /64
+0.99
+/48
+      CDF
+CDF
+CDF
+CDF
+    
+AS #FRPs 19551 165k
+FRPlist Org
+Imperva Cloudflare Amazon Akamai Denpa RACKTECH Facebook Black Mesa Claro NXT Akamai
+TCP/Port AS #FRPs
+80/443/... 16509 1260 80/443 36183 1219 80/443 13335 366
+80/443/53 19551 312 22 204916 248 80 36492 237
+- 210842 222 22 54113 171 - 45609 167 - 216157 163
+FRRPlist Org
+Amazon
+Akamai Cloudflare Imperva RACKTECH Google Rohmad Kumiadin Fastly Bharti Airtel SIXNET
+TCP/Port AS
+80/443 19551 - 13335 80/443 16509 80/443/... 20940
+80/53 131662 - 204916
+22 32934 80/443 46997 - 28573 22 36492
+#FRPs
+164k 98.6k 96.7k 36.3k 26.1k 18.1k 9.64k 3.75k 2.35k 1.97k
+FRNRPlist Org
+Imperva Cloudflare Amazon Akamai Denpa RACKTECH Facebook Black Mesa Claro NXT Google
+TCP/Port
+80/443/... 80/443 80/443 80/443/53 22 53/80
+- 22 - -
+13335 16509 20940 131662 204916 32934 46997 28573 36183
+99k 97.9k 36.3k 26.1k 18.4k 9.64k 3.75k 2.36k 2.24k
+TABLE III
+TOP 10 ASES BASED ON THE NUMBER OF FRPS IN FRPLIST, FRRPLIST, AND FRNRPLIST, RESPECTIVELY.
+e.g., load balancing of IP addresses in large systems, proxy services. In addition, the implementation of FRPs is diverse, except for CDNs (which are inconvenient to inform), most of them are based on the existing functionality implemented in Linux systems (e.g., net.ipv6.ip nonlocal bind option), and each of their FRPs corresponds to the same host.
+H. Impact of Our FRPlist
+FRPlist is very important for IPv6 network measurement campaigns, which can effectively reduce wasted probing re- sources and minimize biases in the measurement results. The above analysis reinforces this view, which is mainly reflected in the fact that FRPs are widely distributed and cover a huge address space, but these addresses do not each correspond to a real responder behind them. Therefore, it very meaningful to build an open-source FRPlist for this community of IPv6 net- work measurement. Meanwhile, this can also avoid different researchers and organizations from carrying out similar repet- itive probing processes, thereby adding unnecessary burden to the network. Although the Hitlist has published the existing FRPlist collects in previous active address probing, which is not comprehensive and does not fully satisfy the requirements.
+To prove this point, we chose the latest (May 4, 2024) publicly active address dataset from the Hitlist for experiments. The dataset contains 24.5M active addresses, which have been filtered using the Hitlist’s own FRPlist. However, after comparing it to our FRPlist, we found that there are still 4.8M addresses under FRPs, accounting for a proportion of 20%. This means that about 20% of the probing resources were wasted. More importantly, the IPv6 active address dataset in Hitlist is a commonly used dataset under IPv6, which is likely to be used as a dataset for further measurement research, such as continuing active address probing as seeds [2]–[5], [8]–[11], port probing [16], [17], Security analysis [17], [35]. However, when we are unaware of the presence of addresses under FRPs, this may lead to some unknown measurement bias or even wrong conclusions. As an intuitive example, when further asset probing is performed based on these addresses, we may find a much higher amount of assets than in the real network.
+Key takeaways: IPv6 FRPs have resulted in a massive amount of fake active addresses in the network, e.g., the well- known and commonly used Hitlist’s active address dataset
+contains 20% of such addresses, significantly impacting all measurement activities based on this dataset. Therefore, it is essential to actively probe Internet-wide FRPs to reveal this impact and to construct a long-maintained FRPlist for use by relevant researchers.
+10
+4.5K 3K 1.5K 0
+360K 240K 120K
+0
+China
+China
+Singapore
+Britain
+ICMPv6
+Japan
+(a) Internet-wide FRRPs
+Japan
+(b) NFRRPs in the NFRRPlist
+TCP/80
+TCP/443
+America
+America
+Singapore
+Britain
+Fig. 7. Number of FRRPs and FRNRPs monitored based on different protocols/port scans in different vantage points around the world
+I. Spatial Stability.
+To study the impact of vantage points on FRPlist, we performed scans based on ICMPv6, TCP/80 and TCP/443 at geographically and topologically diverse vantage points. Fig. 7 shows the results of our scanning and determination of Internet-wide FRRPs and FRNRPs in the FRNRPlist in May 2024, where the vantage points are distributed across five different countries and the results are averaged over multiple experiments to minimize the impact of network fluctuations. For the Internet-wide FRRPs, it can be seen that the results are basically similar at different vantage points. Although relatively fewer FRRPs were obtained at the Japanese vantage point, we found some cases of incomplete response of 16 random addresses as mentioned earlier, which may also be due to the network environment. For the FRNRPs in FRNRPlist, we found an interesting phenomenon that the number of FRNRPs obtained at the three vantage points in Asia was consistent. However, the number of FRNRPs determined to be FRNRPs at the vantage points in Britain and America
+      #NFRRPs
+#FRRPs
+
+was about one-third less. Meanwhile, this phenomenon was indeed absent for FRRPs scanned at the same time. We analyze FRRPs as global routing prefixes, so their routes are richer and more reliable. However, FRNRPs may be correlated with vantage points. Because the FRPlist in this paper was obtained by probing in Asia, some of these FRNRPs may show unreachability in some other vantage point scans.
+To confirm the above analysis, we compared the list of FRNRPs at different vantage points and found that the FRN- RPs that are less found in Britain and America vantage points are indeed a subset of the Asian vantage points. Further, we comparatively obtained FRNRPs that could not be determined at Britain and America vantage points and scanned them again. We find that a large number of them suffer from request unreachability, i.e., they cannot fully receive responses from all 16 random addresses. This may be the root cause of them not being determined as FRPs at Britain and America vantage points, as we perform the scanning by sending only one request per address to occupy as little network resources as possible. Since the FRPlist in this paper was obtained by probing in Asia, the three vantage points in Asia were less affected. However, this shows that the active probing of FRPs are related to the vantage points, but the impact can be reduced by sending multiple requests to the same address during the probing.
+Key take-take-away:
+J. Aliased Prefixes in FRPs
+As mentioned earlier, a huge address space is covered under FRPs, where each address obviously cannot be mapped to a real host separately. Therefore, to analyze the configuration between FRPs and hosts in FRPlist, we performed aliased prefix detection on FRPs in FRPlist based on the FAPD algorithm, i.e., to determine whether an FRP maps to a host. The core of FAPD utilizes the host’s fragmentation mechanism to determine whether the responses under an FRP come from the same host. However, FAPD also has a major limitation, i.e., it cannot be applied to hosts that cannot induce fragmentation. Therefore, we find that only 59117 FRPs in our FRPlist (2378 in FRRPlist and 56739 in FRNRPlist) are applicable to FAPD, of which 25410 FRPs (645 in FRRPlist and 24765 in FRNRPlist) are further determined as aliased prefixes. Table IV shows the top 5 ASes in terms of number of aliased prefixes in FRRPlist and FRNRPlist.
+Table IV shows information about the 5 ASes with the high- est number of aliased prefixes in FRRPlist and FRNFRPlist, respectively, including the number of aliased prefixes under each AS, the organization to which the AS belongs, the main open TCPs/Ports and business categories. We found that most of the top 5 ASes in FRRPlist and FRNFRPlist are Internet Service Providers (ISPs) and their aliased prefixes are mainly open port 22 (usually SSH services). This suggests that aliased prefixes are practiced in ISPs and that remote server login may be one of the usage scenarios. In addition, these ASes also belong to hosting and cloud provider, software development, media broadcasting, etc., and their aliased prefixes are mainly
+open on ports 80/443. This indicates that aliased prefixes may also be used in large concurrent system services and performing HTTP/HTTPs services may be one of the usage scenarios.
+Key take-take-away:
+K. Trend and Stability over Time.
+Network environments are constantly changing over time, especially IPv6 networks, which are currently undergoing rapid development. Therefore, to study the trend of Internet- wide FRPs over time as well as the stability of probed FRPs over time, we analyze the results of long-term scanning monitoring for FRPlist. Fig. 8 shows the change in the number of Internet-wide routing prefixes (RPs) and those determined as FRRPs under ICMPv6, TCP/80, and TCP/443 over the last six months, with TCP/80 and TCP/443 starting scanning and monitoring a little later (December 23, 2023). We find that the number of FRRPs is increasing as more Internet-wide RPs are announced, especially FRRP-ICMPv6, which has increased by almost 1,000 in six months. This suggests that the number of FRRPs will continue to increase over time, further highlighting the potential application value of FRPs. Although currently FRRPs represent a small proportion in Internet-wide RPs, the address space they cover under IPv6 cannot be ignored. What’s more, most of them (about 80%) are FRPs in the long term. Overall, most of the FRRPs in our current cumulative FRRPlist are stable in the long term and are still increasing. Overall, our accumulated FRRPlist is stable in the long term and is still increasing.
+Fig. 9 shows the cumulative number of probed FRNRPs in FRNRPlist and the number determined to be FRNRPs by long- term scanning monitoring over time for the last six months. The main ICMPv6, TCP/80 and TCP/443 (§IV-L) were se- lected for the protocol/port in the long-term scan monitoring. We can see that as the probing proceeds, more and more largest FRPs are accumulated in FRNRPlist. Meanwhile, when the FRNRPlist is not updated (i.e., between the two vertical lines), the monitoring results show that the FRNRPs in FRNRPlist are stable in the long term for all three protocols/ports. In addition, from both Fig. 8 and 9, it can be found that at March 28, there is a sudden drop in both FRRP-ICMPv6 and FRNRP-ICMPv6 monitored, which may be due to fluctuations in the scanner network. Especially with the gradual increase of FRNRPlist, more and more network resources are required for scanning. However, to avoid taking up too many network resources to comply with measurement ethical considerations, scanning restrictions were imposed (e.g., bandwidth). As a result, there were fluctuations in the number of FRNRPs scanned and monitored.
+Key take-take-away:
+L. Comparison of Protocols and Ports.
+The above FRPlist is obtained based on ICMPv6 protocol probing, i.e., when determining whether a prefix is FRP or not, ICMPv6 protocol is used in this paper. This is because it can probe more IPv6 addresses based on the experience of
+11
+
+AS #FRPs
+204916 97 213220 73 44812 38 210107 30
+FRRPlist
+Org TCP/Port
+RACKTECH 80/53 Delta 22 IP SERVER 22
+PLUSWEB 22/53
+Business category
+Rack Enclosures ISP
+ISP
+ISP
+AS
+#FRPs
+Org
+Amazon Akamai Constant
+FRNRPlist TCP/Port
+Business category
+54113
+5500
+4500
+3500
+2500
+22
+Fastly 80/443 Software Development
+6939
+0.46k
+ISP
+RP
+TABLE IV
+TOP 5 ASES BASED ON THE NUMBER OF ALIASED PREFIX IN FRRPLIST AND FRNRPLIST, RESPECTIVELY.
+FRRP-ICMPv6 FRRP-TCP/80
+1500 2023-11
+400K 300K 200K 100K
+0 2023-11 2023-12 2024-01
+229K 219K 209K 199K
+2024-05 189K
+500K 400K 300K 200K 100K
+2024-05 0
+2023-12
+2024-01
+2024-02 Date
+2024-04
+Fig. 8. Number of Internet-wide FRRPs (under ICMPv6, TCP/80
+and TCP/443) and FRs over time (scanning by day)
+active address probing [3], [8], [12]. However, to investigate the situation of FRPs under specific protocols and ports, we conducted further scanning on the FRPlist using 40 common ports (20 TCP and 20 UDP ports) to obtain FRPlists under specific protocols and ports. Additionally, to avoid network en- vironment issues (e.g., packet loss), a second scan is performed when 16 random addresses under a prefix are not completely unresponsive. The method is also applied to other scanning experiments in this section. Fig. ?? shows the proportion of FRPs determined using different protocols and ports to the corresponding lists (i.e., FRPlist, FRRPlist, FRNRPlist).
+Firstly, we can see from the ICMPv6 results that about 80% of the FRPlist is active at the current moment (i.e., it is still an FRP since discovery), while the other protocols and ports are only about 30% at most. At the same time, we also found that the FRPlists under other port protocols mostly belong to the 80% of ICMPv6. This indicates that ICMPv6 is indeed the most effective probing protocol. Secondly, about 30% of FRPs in FRPlist are found through partial port scanning of TCP protocols, especially the FRPlists under ports 80 and
+443, which account for a higher percentage in both FRRPlist and FRNRPlist. Meanwhile, compared with FRRPlist, the FRNRPlist can detect more FRPs in most TCP/Ports (e.g., 25, 53, 3306, etc.). This suggests that HTTP/HTTPs services may be one of the main application scenarios for FRRP, while the scope of application for FRNRP is broader, e.g., there may be SMTP (25), DNS (53), MySQL (3306), HTTP-Proxy (8080) in addition to HTTP/HTTPs. In addition, the FRPlists under these TCP/Ports are essentially the same, indicating that the same FRP is being applied to multiple services and that there is consistency in port openings under the same FRP.
+Thirdly, around 70% of the other FRPs in the FRPlist showed no response across the 20 TCP/ports we scanned. This indicates that the situation of port opening under the same FRP may be consistent, regardless of whether the FRP itself has open ports. One possible reason is that an FRP is configured on a single device or a small cluster of devices. However, this has significant implications for IPv6 network port measurement activities. In unknown circumstances, investing significant probing resources and time into port scanning a vast address
+16509
+20940
+20473
+47583 0.49k
+Hostinger 80/443/21 Hurricane 22/80/53
+Electric
+FRRP-TCP/443
+2024-03
+14.4k 5.9k 0.61k
+80/443 80/443/53 22
+Hosting and Cloud Provider Media, Publishing and Broadcasting ISP
+Software Development
+2024-02 2024-03 Date
+2024-04
+Fig. 9. Number of FRNRPs accumulated in FRNRPlist and number of FRNRPs determined by long-term scanning monitoring (under ICMPv6, TCP/80 and TCP/443, scanning by day), where each vertical bar represents the addition of newly detected FRRPs to the FRNRPlist.
+12
+              2023-12-23
+     NFRRP-ICMPv6 NFRRP-TCP/443 NFRRP-TCP/80 NFRRlist
+           #NFRRP #FRRP
+#NFRRPlist #RP
+  
+space under an FRP may yield minimal results. More im- portantly, the measurement conclusions could be misleading. Finally, we also found that FRP was hardly detected under all ports of UDP. This may be due to the fact that UDP scanning typically requires a valid payload to determine whether the port is truly responsive. Meanwhile, it is also possible that the UDP protocol is less commonly used under FRPs.
+Key takeaways: The most effective protocol for probing FRPs is ICMPv6. Both FRRPs and FRNFRPs have heavily open TCP 80/443 ports, so HTTP/HTTPs may be one of their main usage scenarios. In addition, FRNRPs usage scenarios may be more diverse (e.g., SMTP, DNS, MySQL). More im- portantly, there is consistency in port openings under the same FRPs, which will have a huge impact on IPv6 network port measurement activities. Due to the nature of UDP scanning, FRPs under UDP are hardly found.
+V. ETHICAL CONSIDERATIONS
+To achieve Internet-wide probing of FRPs, we follow ethical conventions for network measurement [36], [37]. More impor- tantly, the probing process of Luori is carried out in an iterative manner (§III-C), ensuring that a substantial volume of probing packets is not generated in a short timeframe. We also limit the probing rate to 10 Mbps. This greatly reduces the harm to the network. In addition, to further avoid causing trouble to the probed network, we deployed a web service on the default port of the probing host, which introduced our research and provided a mechanism for interrupting the probing process. Finally, we only send one packet per address when probing, and strictly enforce deduplication during the probing process to avoid one address being probed multiple times and causing problems to the probing point network.
+VI. CONCLUSION AND FUTURE WORK
+In this paper, we propose for the first time an active probing method for Internet-wide IPv6 FRPs, Luori, which realizes effective probing by representing diverse FRP patterns and the entire probing space as a search tree, and then based on reinforcement learning ideas, abstracts the probing process as a search process in the tree and achieves continuous optimization of the probing process. Experiments show that Luori can significantly discover 106 -107 × more address space (i.e., the number of addresses covered by FRPs) than the current brute- force probing method. More importantly, after six months of Internet-wide probing, we have constructed and open-sourced the largest known FRP list. Finally, based on this list, we not only evaluate its impact on IPv6 measurement campaigns, but also analyzed its usage scenarios and implementations, which provide reference for the practical application of FRPs. In the future, we will continue to probe and update this list.
+REFERENCES
+[1] Google, “Ipv6 adoption statistics,” https://www.google.com/intl/en/ipv6/ statistics.html, 2024.
+[2] T. Yang, Z. Cai, B. Hou, and T. Zhou, “6forest: an ensemble learning- based approach to target generation for internet-wide ipv6 scanning,” in IEEE INFOCOM 2022-IEEE Conference on Computer Communications. IEEE, 2022, pp. 1679–1688.
+[3] T. Yang, B. Hou, Z. Cai, K. Wu, T. Zhou, and C. Wang, “6graph: A graph-theoretic approach to address pattern mining for internet-wide ipv6 scanning,” Computer Networks, vol. 203, p. 108666, 2022.
+[4] B. Hou, Z. Cai, K. Wu, J. Su, and Y. Xiong, “6hit: A reinforcement learning-based approach to target generation for internet-wide ipv6 scanning,” in IEEE INFOCOM 2021-IEEE Conference on Computer Communications. IEEE, 2021, pp. 1–10.
+[5] Z. Liu, Y. Xiong, X. Liu, W. Xie, and P. Zhu, “6tree: Efficient dynamic discovery of active addresses in the ipv6 address space,” Computer Networks, vol. 155, pp. 31–46, 2019.
+[6] A. Murdock, F. Li, P. Bramsen, Z. Durumeric, and V. Paxson, “Target generation for internet-wide ipv6 scanning,” in Proceedings of the 2017 Internet Measurement Conference, 2017, pp. 242–253.
+[7] P. Foremski, D. Plonka, and A. Berger, “Entropy/ip: Uncovering struc- ture in ipv6 addresses,” in Proceedings of the 2016 Internet Measurement Conference, 2016, pp. 167–181.
+[8] G.Song,J.Yang,Z.Wang,L.He,J.Lin,L.Pan,C.Duan,andX.Quan, “Det: Enabling efficient probing of ipv6 active addresses,” IEEE/ACM Transactions on Networking, vol. 30, no. 4, pp. 1629–1643, 2022.
+[9] T. Cui, G. Gou, G. Xiong, C. Liu, P. Fu, and Z. Li, “6gan: Ipv6 multi-pattern target generation via generative adversarial nets with reinforcement learning,” in IEEE INFOCOM 2021-IEEE Conference on Computer Communications. IEEE, 2021, pp. 1–10.
+[10] G. Song, J. Yang, L. He, Z. Wang, G. Li, C. Duan, Y. Liu, and Z. Sun, “Addrminer: A comprehensive global active ipv6 address discovery system,” in 2022 USENIX Annual Technical Conference (USENIX ATC 22), 2022, pp. 309–326.
+[11] B. Hou, Z. Cai, K. Wu, T. Yang, and T. Zhou, “6scan: A high-efficiency dynamic internet-wide ipv6 scanner with regional encoding,” IEEE/ACM Transactions on Networking, 2023.
+[12] J.Zirngibl,L.Steger,P.Sattler,O.Gasser,andG.Carle,“Rustyclusters? dusting an ipv6 research foundation,” in Proceedings of the 2022 Internet Measurement Conference. New York, NY, USA: ACM, 2022.
+[13] P. Sattler, J. Zirngibl, M. Jonker, O. Gasser, G. Carle, and R. Holz, “Packed to the brim: Investigating the impact of highly responsive prefixes on internet-wide measurement campaigns,” Proceedings of the ACM on Networking, vol. 1, no. CoNEXT3, pp. 1–21, 2023.
+[14] O. Gasser, Q. Scheitle, P. Foremski, Q. Lone, M. Korczynski, S. D. Strowes, L. Hendriks, and G. Carle, “Clusters in the expanse: Under- standing and unbiasing ipv6 hitlists,” in Proceedings of the 2018 Internet Measurement Conference. New York, NY, USA: ACM, 2018.
+[15] L. Steger, L. Kuang, J. Zirngibl, G. Carle, and O. Gasser, “Target ac- quired? evaluating target generation algorithms for ipv6,” in Proceedings of the Network Traffic Measurement and Analysis Conference (TMA), Jun. 2023.
+[16] A. Maghsoudlou, O. Gasser, and A. Feldmann, “Zeroing in on port 0 traffic in the wild,” in Passive and Active Measurement: 22nd Interna- tional Conference, PAM 2021, Virtual Event, March 29–April 1, 2021, Proceedings 22. Springer, 2021, pp. 547–563.
+[17] P. Jose, S. J. Saidi, and O. Gasser, “Analyzing iot hosts in the ipv6 internet,” 2023.
+[18] R. Beverly, “Yarrp’ing the internet: Randomized high-speed active topology discovery,” in Proceedings of the 2016 Internet Measurement Conference, 2016, pp. 413–420.
+[19] R. Beverly, R. Durairajan, D. Plonka, and J. P. Rohrer, “In the ip of the beholder: Strategies for active ipv6 topology discovery,” in Proceedings of the Internet Measurement Conference 2018, 2018, pp. 308–321.
+[20] X. Li, B. Liu, X. Zheng, H. Duan, Q. Li, and Y. Huang, “Fast ipv6 network periphery discovery and security implications,” in 2021 51st Annual IEEE/IFIP International Conference on Dependable Systems and Networks (DSN), 2021, pp. 88–100.
+[21] Z. Durumeric, E. Wustrow, and J. A. Halderman, “Zmap: fast internet- wide scanning and its security applications,” in 22nd USENIX Security Symposium (USENIX Security 13), 2013, pp. 605–620.
+[22] R. D. Graham, “Masscan: Mass ip port scanner,” https://github.com/ robertdavidgraham/masscan, 2023.
+[23] M. Fayed, L. Bauer, V. Giotsas, S. Kerola, M. Majkowski, P. Odintsov, J. Sitnicki, T. Chung, D. Levin, A. Mislove et al., “The ties that un- bind: Decoupling ip from web services and sockets for robust addressing agility at cdn-scale,” in Proceedings of the 2021 ACM SIGCOMM 2021 Conference, 2021, pp. 433–446.
+[24] Routeviews, “University of oregon route views project,” https://www. routeviews.org/routeviews/, 2024.
+13
+
+[25] C. B. Browne, E. Powley, D. Whitehouse, S. M. Lucas, P. I. Cowling, P. Rohlfshagen, S. Tavener, D. Perez, S. Samothrakis, and S. Colton, “A survey of monte carlo tree search methods,” IEEE Transactions on Computational Intelligence and AI in games, vol. 4, no. 1, pp. 1–43, 2012.
+[26] M. S ́wiechowski, K. Godlewski, B. Sawicki, and J. Man ́dziuk, “Monte carlo tree search: A review of recent modifications and applications,” Artificial Intelligence Review, vol. 56, no. 3, pp. 2497–2562, 2023.
+[27] CAIDA, “Correspondence between as and organizations,” https:// publicdata.caida.org/datasets/as-organizations/, 2024.
+[28] M.Ziv,L.Izhikevich,K.Ruth,K.Izhikevich,andZ.Durumeric,“Asdb: a system for classifying owners of autonomous systems,” in Proceedings of the 21st ACM Internet Measurement Conference, 2021, pp. 703–719.
+[29] ——, “Correspondence between as and business categories,” https: //asdb.stanford.edu/, 2023.
+[30] C. Dann, Y. Mansour, M. Mohri, A. Sekhari, and K. Sridharan, “Guar- antees for epsilon-greedy reinforcement learning with function approx- imation,” in International conference on machine learning. PMLR, 2022, pp. 4666–4689.
+[31] M. Tokic, “Adaptive ε-greedy exploration in reinforcement learning based on value differences,” in Annual conference on artificial intel- ligence. Springer, 2010, pp. 203–210.
+[32] Cloudflare, “Cloudflare spectrum,” https://blog.cloudflare.com/ spectrum/, 2024.
+[33] ——, “Cloudflare spectrum product,” https://www.cloudflare.com/ products/cloudflare-spectrum/, 2024.
+[34] ——,“Cloudflarespectrumnetworkports,”https://developers.cloudflare. com/fundamentals/reference/network-ports/, 2024.
+[35] M. S. Pour, C. Nader, K. Friday, and E. Bou-Harb, “A comprehensive survey of recent internet measurement techniques for cyber security,” Computers & Security, vol. 128, p. 103123, 2023.
+[36] E. Kenneally and D. Dittrich, “The menlo report: Ethical principles guiding information and communication technology research,” Available at SSRN 2445102, 2012.
+[37] C. Partridge and M. Allman, “Ethical considerations in network mea- surement papers,” Communications of the ACM, vol. 59, no. 10, pp. 58–64, 2016.
+14
