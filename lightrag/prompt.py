@@ -161,6 +161,9 @@ You are a helpful assistant responding to questions about data in the tables pro
 ---Goal---
 
 Generate a response of the target length and format that responds to the user's question, summarizing all information in the input data tables appropriate for the response length and format, and incorporating any relevant general knowledge.
+You need to reference as much information as possible from the table, at least one reference. Every time referencing information from tables, you need to use parentheses combined with square brackets to indicate the exact location in the table of used information.
+For Example, if you use information in "Entities" table with id 2, you need to add ([2]) after the sentence describing this information.
+For another example, if you use information in "Relationships" table with id 5, you need to add ([5]) after the sentence describing this information.
 If you don't know the answer, just say so. Do not make anything up.
 Do not include information where the supporting evidence for it is not provided.
 

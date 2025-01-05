@@ -1,0 +1,20 @@
+What is the primary purpose of the Luori probing method for IPv6 Fully Responsive Prefixes (FRPs)?
+How do FRPs affect the efficiency and accuracy of IPv6 network measurement campaigns?
+What are the main challenges associated with detecting and analyzing IPv6 FRPs?
+How does the reinforcement learning-based ε-Q strategy improve the efficiency of probing?
+What is the significance of constructing search trees for seeded and unseeded prefixes in Luori?
+How does Luori's inter-prefix search tree transfer strategy address the issue of unseeded prefixes?
+How does Luori compare to the MAPD brute-force probing method in terms of efficiency and scope?
+What metrics were used to evaluate the performance of Luori, and why are they significant?
+What factors contributed to the significant improvement in address space coverage by Luori compared to MAPD?
+How can the FRPlist constructed by Luori benefit the research community and practical IPv6 applications?
+What industries or services are most likely to benefit from the deployment of IPv6 FRPs?
+How does the presence of FRPs in datasets like Hitlist's active address dataset introduce bias or errors in network measurements?
+What are the potential limitations of the APD method used for detecting FRPs?
+How does Luori adapt to the sparse and dynamically changing distribution of FRPs?
+How might the growing prevalence of FRPs influence future IPv6 measurement techniques?
+What additional features or enhancements could be added to Luori to improve its performance or usability?
+What ethical considerations are associated with large-scale probing of IPv6 networks, and how does Luori address them?
+How does the distribution of probing resources differ for seeded and unseeded prefixes, and why?
+How were the authenticity and characteristics of probed FRPs verified through email correspondence with network managers?
+What methods were used to analyze the impact of vantage points on the detection and stability of FRPs?

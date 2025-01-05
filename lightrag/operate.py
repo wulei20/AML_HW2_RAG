@@ -721,6 +721,8 @@ async def _get_node_data(
     # build prompt
     entites_section_list = [["id", "entity", "type", "description", "rank"]]
     for i, n in enumerate(node_datas):
+        if i >= 20:
+            break
         entites_section_list.append(
             [
                 i,
@@ -736,6 +738,8 @@ async def _get_node_data(
         ["id", "source", "target", "description", "keywords", "weight", "rank"]
     ]
     for i, e in enumerate(use_relations):
+        if i >= 10:
+            break
         relations_section_list.append(
             [
                 i,
@@ -751,6 +755,8 @@ async def _get_node_data(
 
     text_units_section_list = [["id", "content"]]
     for i, t in enumerate(use_text_units):
+        if i >= 1:
+            break
         text_units_section_list.append([i, t["content"]])
     text_units_context = list_of_list_to_csv(text_units_section_list)
     return entities_context, relations_context, text_units_context
@@ -919,6 +925,8 @@ async def _get_edge_data(
         ["id", "source", "target", "description", "keywords", "weight", "rank"]
     ]
     for i, e in enumerate(edge_datas):
+        if i >= 10:
+            break
         relations_section_list.append(
             [
                 i,
@@ -931,9 +939,10 @@ async def _get_edge_data(
             ]
         )
     relations_context = list_of_list_to_csv(relations_section_list)
-
     entites_section_list = [["id", "entity", "type", "description", "rank"]]
     for i, n in enumerate(use_entities):
+        if i >= 20:
+            break
         entites_section_list.append(
             [
                 i,
@@ -947,6 +956,8 @@ async def _get_edge_data(
 
     text_units_section_list = [["id", "content"]]
     for i, t in enumerate(use_text_units):
+        if i >= 1:
+            break
         text_units_section_list.append([i, t["content"]])
     text_units_context = list_of_list_to_csv(text_units_section_list)
     return entities_context, relations_context, text_units_context

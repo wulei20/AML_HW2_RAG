@@ -1,0 +1,60 @@
+naive:
+ FRP stands for "Flexible Routing Prefix." It is a method used in networking to provide a dynamic and scalable way of assigning IP addresses within a network. FRP allows an organization to have a single, large IPv6 address prefix that can be divided and assigned to various subnetworks or devices as needed. This approach is particularly useful for organizations that require a large number of IP addresses but want to manage them more efficiently.
+
+In an FRP setup, the main IPv6 prefix is not directly assigned to any device but is instead used to create a pool of available addresses. When a new device or subnetwork needs an IP address, it is allocated one from this pool. This method offers several advantages, including:
+
+- **Efficient Address Management**: FRP allows for more efficient use of address space, as addresses can be allocated and reassigned as needed without requiring a new prefix.
+- **Scalability**: Organizations can easily scale their network by adding new devices or subnetworks without having to obtain additional IP address space.
+- **Security**: FRP can enhance security by providing a way to isolate traffic between different subnetworks.
+
+The document provided discusses the use of FRPs in the context of IPv6 networks, highlighting their presence and usage across various organizations and the challenges and opportunities they present for network measurement and security.
+{
+  "high_level_keywords": ["FRP", "Material", "Composite"],
+  "low_level_keywords": ["Fiberglass Reinforced Polymer", "Plastic", "Polyester", "Vinylester", "Glass fiber"]
+}
+local:
+ Fully Responsive Prefixes (FRPs) are a type of prefix in network environments where all addresses within the prefix respond to network scans, indicating that they are associated with a single entity or host. This concept was introduced by Zirngibl et al. ([1]) as an extension of the idea of aliased prefixes, which were first mentioned by 6Gen ([6]). FRPs are a subset of aliased prefixes and are defined as those prefixes where all addresses respond to scans, as opposed to aliased prefixes where only a subset of addresses may respond.
+
+FRPs are significant in network analysis and security due to their potential use in network attacks and data exfiltration. They can be implemented in various ways, with the implementation patterns varying widely and often being of arbitrary lengths. This diversity in FRP patterns poses a challenge for their analysis and feature extraction ([0]). For instance, the FRP patterns under different global routing prefixes may differ, making it difficult to generalize about their characteristics ([0]).
+
+The presence of FRPs is widespread, with the FRPlist ([2]) being the largest publicly available list of FRPs, compiled and made available to the research community for analysis and research. The FRPlist includes information about FRPs from various sources, including organizations, such as Cloudflare, Akamai, and Amazon ([3], [4], [5]), as well as information about Internet Service Providers (ISPs) ([8]) and Content Delivery Networks (CDNs) ([9]).
+
+FRPs are often used in network environments for legitimate purposes, such as load balancing and traffic management, but they can also be exploited for malicious activities. Therefore, understanding the characteristics and distribution of FRPs is crucial for network security and monitoring.
+{
+  "high_level_keywords": ["FRP", "Material properties"],
+  "low_level_keywords": ["Fiber-reinforced polymer", "Composite material", "Strength", "Durability"]
+}
+global:
+ FRP, which stands for Forwarding Reputation Prefix, is a concept that plays a significant role in the context of internet routing and network management. Based on the provided data, FRPlist is described as a category or type of list that reveals the current status and characteristics of Internet-wide FRPs, providing insights into their practical application in the network ([0]). FRPlist serves as a collection of information about FRPs, including their configuration and mappings to hosts, and is an open-source list containing information about addresses behind FRPs. This information is crucial for minimizing biases in measurement results and avoiding repetitive probing processes ([0]).
+
+In the context of the relationships between entities, FRPlist is shown to be closely connected to various organizations and methods. For example, Luori, an active probing method for Internet-wide IPv6 FRPs, contributes to the FRPlist by probing for FRPs of arbitrary length, enhancing its coverage. Luori also develops and maintains the FRPlist, which is used for various probing activities ([0]). Additionally, organizations like Cloudflare, Akamai, and Amazon may contribute FRPs to the FRPlist, enriching its list of Forwarding Reputation Prefixes ([2], [3], [4]).
+
+The data also highlights the significance of ASes (Autonomous Systems) in relation to FRPs. FRPlist includes information about ASes, which are organizations that connect IP networks, indicating their role in the network's routing information ([6]). Furthermore, the FRPlist is utilized in IPv6 measurement campaigns to evaluate network readiness, demonstrating its utility in assessing the state of internet networks ([7]).
+
+In summary, FRP is a term referring to Forwarding Reputation Prefixes, and FRPlist is a comprehensive, open-source collection of information about these prefixes. It plays a critical role in internet routing and network management, providing insights into their status, characteristics, and application across various networks and organizations.
+{
+  "high_level_keywords": ["FRP", "Material properties", "Composite materials"],
+  "low_level_keywords": ["Fiber reinforced polymer", "Resin", "Glass fiber", "Carbon fiber", "Strength"]
+}
+hybrid:
+ FRP stands for Fully Responsive Prefix. It refers to a set of IP addresses where all the addresses within the prefix respond to network scans and are considered to be responses from a single host. This concept is significant in the context of Internet routing and network security. Here's a breakdown of the key aspects of FRPs:
+
+### Definition and Characteristics
+- **Fully Responsive**: All addresses within the FRP prefix respond to network scans, indicating that they are part of a single host or service.
+- **Prefix**: FRPs are defined by an IP prefix, which is a portion of the IP address that identifies a network or a group of hosts.
+
+### Usage and Importance
+- **Network Security**: FRPs can be used to hide the true IP address of a server or service, providing a layer of security by making it harder for attackers to identify the actual host.
+- **Content Delivery Networks (CDNs)**: CDNs often use FRPs to improve addressing flexibility and support services efficiently, as mentioned in the entities table for Cloudflare ([4]) and Akamai ([5]).
+- **IPv6 Implementation**: FRPs are more prevalent in IPv6 networks due to the larger address space and the need for more sophisticated routing and addressing schemes.
+
+### Challenges and Considerations
+- **Sparse Distribution**: FRPs are generally sparse within the vast IPv6 address space, making their detection and discovery challenging ([Sources], Section G).
+- **Diverse FRP Patterns**: FRPs can have arbitrary lengths and various implementations, which complicates their analysis and feature extraction ([Sources], Section G).
+
+### Detection and Probing Methods
+- **Luori**: Luori is an efficient FRP active probing method based on reinforcement learning that can probe FRPs under any target prefix at Internet scale ([Sources], Section G).
+- **MAPD**: MAPD is an FRP probing method based on active addresses, which is used to avoid impact on active address probing results ([Entities], [3]; [Relationships], [2]).
+
+### Conclusion
+FRPs play a crucial role in modern network infrastructures, particularly in enhancing security and addressing flexibility. However, their sparse distribution and diverse patterns present challenges for their detection and analysis. Probing methods like Luori and MAPD are being developed to address these challenges and provide a more comprehensive understanding of FRPs in the network environment.

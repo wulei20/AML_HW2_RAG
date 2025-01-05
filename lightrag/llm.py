@@ -33,6 +33,7 @@ from .utils import (
     safe_unicode_decode,
     logger,
 )
+from local_model.glm4 import generate_glm4_output
 
 import sys
 
@@ -625,8 +626,10 @@ async def zhipu_complete_if_cache(
 
     messages = []
 
+    write_file = True
     if not system_prompt:
         system_prompt = "You are a helpful assistant. 注意内容里的敏感词用***替换。"
+        write_file = False
 
     # Add system prompt if provided
     if system_prompt:
@@ -645,7 +648,6 @@ async def zhipu_complete_if_cache(
     }
 
     response = client.chat.completions.create(model=model, messages=messages, **kwargs)
-
     return response.choices[0].message.content
 
 
@@ -719,6 +721,91 @@ async def zhipu_complete(
     else:
         # For non-keyword-extraction, just return the raw response string
         return await zhipu_complete_if_cache(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            history_messages=history_messages,
+            **kwargs,
+        )
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=4, max=10),
+    retry=retry_if_exception_type((RateLimitError, Timeout)),
+)
+async def local_glm4_complete_if_cache(
+    prompt: Union[str, List[Dict[str, str]]],
+    system_prompt: Optional[str] = None,
+    history_messages: List[Dict[str, str]] = [],
+    **kwargs,
+) -> str:
+
+    messages = []
+
+    if not system_prompt:
+        system_prompt = "You are a helpful assistant. 注意内容里的敏感词用***替换。"
+
+    # Add system prompt if provided
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.extend(history_messages)
+    messages.append({"role": "user", "content": prompt})
+
+    # Add debug logging
+    logger.debug("===== Query Input to LLM =====")
+    logger.debug(f"Query: {prompt}")
+    logger.debug(f"System prompt: {system_prompt}")
+
+    result = generate_glm4_output(messages)
+
+    return result
+
+
+async def local_glm4_complete(
+    prompt, system_prompt=None, history_messages=[], keyword_extraction=False, **kwargs
+):
+
+    if keyword_extraction:
+        # Add a system prompt to guide the model to return JSON format
+        extraction_prompt = """You are a helpful assistant that extracts keywords from text.
+        Please analyze the content and extract two types of keywords:
+        1. High-level keywords: Important concepts and main themes
+        2. Low-level keywords: Specific details and supporting elements
+
+        Return your response in this exact JSON format:
+        {
+            "high_level_keywords": ["keyword1", "keyword2"],
+            "low_level_keywords": ["keyword1", "keyword2", "keyword3"]
+        }
+
+        Only return the JSON, no other text."""
+
+        # Combine with existing system prompt if any
+        if system_prompt:
+            system_prompt = f"{system_prompt}\n\n{extraction_prompt}"
+        else:
+            system_prompt = extraction_prompt
+
+        try:
+            response = await zhipu_complete_if_cache(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                history_messages=history_messages,
+                **kwargs,
+            )
+            if response.count('{') != response.count('}'):
+                logger.info(f"origin response not in json format: {response}")
+                response = '{'+ response.replace('{', '').replace('}', '') + '}'
+                logger.info(f"reset response to: {response}")
+            return response
+        
+        except Exception as e:
+            logger.error(f"Error during keyword extraction: {str(e)}")
+            return GPTKeywordExtractionFormat(
+                high_level_keywords=[], low_level_keywords=[]
+            )
+    else:
+        # For non-keyword-extraction, just return the raw response string
+        return await local_glm4_complete_if_cache(
             prompt=prompt,
             system_prompt=system_prompt,
             history_messages=history_messages,

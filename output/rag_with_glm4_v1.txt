@@ -1,0 +1,51 @@
+naive:
+ 
+FRP stands for "Flexible Routing Prefix." It is a term used in the context of IPv6 networking.
+
+An FRP is a block of IPv6 addresses that is used to provide a flexible and scalable routing solution. FRPs are particularly useful in scenarios where a large number of IPv6 addresses are required, such as in cloud computing environments or content delivery networks (CDNs).
+
+{
+            "high_level_keywords": ["FRP", "Fiber Reinforced Polymer"],
+            "low_level_keywords": ["Polyester", "Epoxy", "Glass fiber", "Carbon fiber", "Composite material", "Building material", "Industrial application"]
+        }
+local:
+ 
+FRP stands for "Fully Responsive Prefix." It is a term used in the context of network security and IPv6 address space.
+
+An FRP is characterized by a prefix in the IPv6 address space, where all addresses under that prefix respond to network scans. This means that the prefix is fully responsive, as opposed to other prefixes that may not respond uniformly.
+
+FRPs are of particular interest in network security because they can be used to hide malicious activities or to bypass network security measures.
+{
+
+  "high_level_keywords": ["FRP", "Fiber Reinforced Polymer", "Material properties"],
+  "low_level_keywords": ["Polyester", "Epoxy", "Glass fiber", "Carbon fiber", "Mechanical properties", "Chemical resistance"]
+}
+global:
+ 
+FRP stands for Forwarding Reputation Prefix. It is a term used in the context of networking and Internet protocols.
+
+FRPs are used to identify and route traffic to specific destinations on the Internet. They are often used in conjunction with other networking technologies, such as Content Delivery Networks (CDNs) and Domain Name Systems (DNS).
+
+In summary, FRPs are an essential component of modern networking infrastructure, enabling efficient and reliable routing of Internet traffic.
+{
+
+  "high_level_keywords": ["FRP", "Fiber Reinforced Polymer", "Material properties"],
+  "low_level_keywords": ["Polyester", "Epoxy", "Glass fiber", "Carbon fiber", "Mechanical properties", "Chemical resistance"]
+}
+hybrid:
+ 
+FRP stands for "Fully Responsive Prefix." It refers to a specific type of IPv6 routing prefix. 
+
+Key characteristics of FRPs include:
+
+- **Fully Responsive**: All addresses within an FRP prefix respond to network scans, indicating that they are all controlled by a single entity or host.
+
+- **Prefix Length**: FRPs can have various lengths, but they are typically longer than /64 prefixes, which are commonly used for individual networks.
+
+FRPs are significant in network environments for several reasons:
+
+- **Network Security**: FRPs can be used to enhance network security by providing a way to hide the actual IP addresses of servers and other network resources.
+
+- **Content Delivery Networks (CDNs)**: FRPs are often used in CDNs to improve the efficiency and performance of content delivery services.
+
+In summary, FRPs are a specific type of IPv6 routing prefix that is fully responsive and has various applications in network environments.
